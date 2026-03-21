@@ -1,8 +1,111 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  MECHANIC
+  ADMIN
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  ON_THE_WAY
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String   @unique
+  password  String
+  role      Role     @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workshops Workshop[]
+  reviews   Review[]
+
+  // Diperbaiki: Cukup 1 variabel untuk relasi ini
+  requests  EmergencyRequest[] @relation("CustomerRequests")
+}
+
+model Workshop {
+  id          String   @id @default(uuid())
+  ownerId     String
+  name        String
+  description String?
+  address     String
+  latitude    Float
+  longitude   Float
+  isOpen24_7  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  owner    User               @relation(fields: [ownerId], references: [id])
+  services WorkshopService[]
+  requests EmergencyRequest[] @relation("WorkshopRequests")
+  reviews  Review[]
+}
+
+model Service {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  iconUrl     String?
+  
+  workshops WorkshopService[]
+}
+
+model WorkshopService {
+  id          String   @id @default(uuid())
+  workshopId  String
+  serviceId   String
+  price       Decimal  @db.Decimal(10, 2) 
+  isAvailable Boolean  @default(true)
+
+  workshop Workshop @relation(fields: [workshopId], references: [id])
+  service  Service  @relation(fields: [serviceId], references: [id])
+
+  @@unique([workshopId, serviceId]) 
+}
+
+model EmergencyRequest {
+  id             String        @id @default(uuid())
+  customerId     String
+  workshopId     String?       
+  serviceId      String?       
+  userLatitude   Float         
+  userLongitude  Float         
+  issueNote      String?       
+  status         RequestStatus @default(PENDING)
+  totalPrice     Decimal?      @db.Decimal(10, 2)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  customer User      @relation("CustomerRequests", fields: [customerId], references: [id])
+  workshop Workshop? @relation("WorkshopRequests", fields: [workshopId], references: [id])
+  review   Review?   
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  requestId  String   @unique
+  userId     String
+  workshopId String
+  rating     Int      
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  request  EmergencyRequest @relation(fields: [requestId], references: [id])
+  user     User             @relation(fields: [userId], references: [id])
+  workshop Workshop         @relation(fields: [workshopId], references: [id])
 }
