@@ -1,52 +1,11 @@
-/*
-  Warnings:
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('CUSTOMER', 'MECHANIC', 'ADMIN');
 
-  - You are about to drop the `Assigment` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `Notification` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `SOSRequest` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `ServiceLog` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `User` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `Vehicle` table. If the table is not empty, all the data it contains will be lost.
+-- CreateEnum
+CREATE TYPE "SOSStatus" AS ENUM ('REQUESTED', 'ASSIGNED', 'ON_PROGRESS', 'DONE', 'CANCELED');
 
-*/
--- DropForeignKey
-ALTER TABLE "Assigment" DROP CONSTRAINT "Assigment_mechanic_id_fkey";
-
--- DropForeignKey
-ALTER TABLE "Assigment" DROP CONSTRAINT "Assigment_sos_request_id_fkey";
-
--- DropForeignKey
-ALTER TABLE "Notification" DROP CONSTRAINT "Notification_user_id_fkey";
-
--- DropForeignKey
-ALTER TABLE "SOSRequest" DROP CONSTRAINT "SOSRequest_user_id_fkey";
-
--- DropForeignKey
-ALTER TABLE "SOSRequest" DROP CONSTRAINT "SOSRequest_vehicle_id_fkey";
-
--- DropForeignKey
-ALTER TABLE "ServiceLog" DROP CONSTRAINT "ServiceLog_sos_request_id_fkey";
-
--- DropForeignKey
-ALTER TABLE "Vehicle" DROP CONSTRAINT "Vehicle_user_id_fkey";
-
--- DropTable
-DROP TABLE "Assigment";
-
--- DropTable
-DROP TABLE "Notification";
-
--- DropTable
-DROP TABLE "SOSRequest";
-
--- DropTable
-DROP TABLE "ServiceLog";
-
--- DropTable
-DROP TABLE "User";
-
--- DropTable
-DROP TABLE "Vehicle";
+-- CreateEnum
+CREATE TYPE "AssignmentStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REJECTED', 'COMPLETED');
 
 -- CreateTable
 CREATE TABLE "user" (

@@ -39,6 +39,9 @@ model user {
   requests            sos_request[]
   mechanic_assigments assigment[]   @relation("MechanicAssigments")
 
+  /**
+  * For mechanics
+  */
   latitude     Float?
   longitude    Float?
   is_available Boolean? @default(false)
