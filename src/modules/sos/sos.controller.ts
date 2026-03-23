@@ -1,6 +1,7 @@
 import type { Response, Request } from "express";
 import { sosService } from "./sos.service";
 import { logger } from "../../lib/logger";
+import { sendSuccess, sendError } from "../../helper/response.helper";
 
 export const sosController = {
   async createSOS(req: Request, res: Response) {
@@ -15,15 +16,9 @@ export const sosController = {
         longitude,
       });
 
-      res.status(201).json({
-        message: "SOS created",
-        data: sos,
-      });
+      return sendSuccess(res, sos, 'SOS created', 201);
     } catch (error) {
-      res.status(500).json({
-        message: "Error creating SOS",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      return sendError(res, 'Error creating SOS', 500, error instanceof Error ? error.message : error);
     }
   },
 
@@ -32,21 +27,14 @@ export const sosController = {
       const { id } = req.params;
 
       if (!id) {
-        return res.status(400).json({
-          message: "ID parameter is required",
-        });
+        return sendError(res, 'ID parameter is required', 400);
       }
 
       const result = await sosService.autoAssign(id.toString());
 
-      res.json({
-        message: "Mechanic assigned",
-        data: result,
-      });
+      return sendSuccess(res, result, 'Mechanic assigned');
     } catch (error) {
-      res.status(500).json({
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
+      return sendError(res, error instanceof Error ? error.message : 'Unknown error', 500, error);
     }
   },
 
@@ -55,14 +43,10 @@ export const sosController = {
       const { id } = req.params;
       const sos = await sosService.getSOSDetail(id!.toString());
       logger.info({ sosId: id }, "Fetched SOS details");
-      res.json({
-        data: sos,
-      });
+      return sendSuccess(res, sos);
     } catch (error) {
       logger.error({ sosId: req.params.id, error }, "Error fetching SOS details");
-      res.status(404).json({
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
+      return sendError(res, error instanceof Error ? error.message : 'Not found', 404, error);
     }
   },
 
@@ -75,14 +59,9 @@ export const sosController = {
         sos_request_id: id!.toString(),
         status,
       });
-      res.json({
-        message: "Status updated",
-        data: result,
-      });
+      return sendSuccess(res, result, 'Status updated');
     } catch (error) {
-      res.status(400).json({
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
+      return sendError(res, error instanceof Error ? error.message : 'Bad request', 400, error);
     }
   },
 };
