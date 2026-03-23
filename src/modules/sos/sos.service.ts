@@ -1,5 +1,4 @@
-import { AssigmentStatus } from "../../../generated/prisma";
-import { SOSStatus } from "../../../generated/prisma";
+import { AssigmentStatus, SOSStatus } from "../../../generated/prisma";
 import { prisma } from "../../prisma";
 import { userRepository } from "../user/user.repository";
 import { userService } from "../user/user.service";
