@@ -16,11 +16,14 @@ const MIN_RADIUS_IN_KM = 10;
 
 export const sosService = {
   async createSOS(data: CreateSOSDTO) {
-    console.log('user_id: ', data.user_id);
     const user = await userRepository.findById(data.user_id);
     if (!user) throw new Error("User not found");
 
     const sos = await sosRepository.create(data);
+    if(sos.user_id == data.user_id && sos.status !== SOSStatus.REQUESTED) {
+      throw new Error("SOS already processed");
+    }
+
     await kafkaProducer.send(KAFKA_TOPICS.CREATED, {
       sosRequestId: sos.id,
       latitude: sos.latitude,

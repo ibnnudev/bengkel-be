@@ -1,6 +1,7 @@
 import { Kafka } from "kafkajs";
 import { KAFKA_TOPICS } from "../infrastructure/kafka/topic";
 import { sosService } from "../modules/sos/sos.service";
+import { logger } from "../lib/logger";
 
 const kafka = new Kafka({
     clientId: process.env.KAFKA_CONSUMER_CLIENT_ID || "sos.consumer",
@@ -14,9 +15,27 @@ export const startSOSConsumer = async () => {
     await consumer.subscribe({ topic: KAFKA_TOPICS.CREATED});
 
     await consumer.run({
-        eachMessage: async ({message}) => {
-            const data = JSON.parse(message.value!.toString());
-            
+        eachMessage: async ({ topic, message }) => {
+            const raw = message.value ? message.value.toString() : null;
+            try {
+                logger.info({ topic, value: raw }, "Kafka message received");
+            } catch (err) {
+                // eslint-disable-next-line no-console
+                console.log("Kafka message:", topic, raw);
+            }
+
+            if (!raw) return;
+
+            let data: any = null;
+            try {
+                data = JSON.parse(raw);
+            } catch (err) {
+                // malformed JSON - still log and return
+                // eslint-disable-next-line no-console
+                console.error("Failed to parse kafka message", err, raw);
+                return;
+            }
+
             try {
                 await sosService.autoAssign(data.sosRequestId);
             } catch (error) {

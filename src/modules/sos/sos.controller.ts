@@ -53,12 +53,13 @@ export const sosController = {
   async getDetail(req: Request, res: Response) {
     try {
       const { id } = req.params;
-
       const sos = await sosService.getSOSDetail(id!.toString());
+      logger.info({ sosId: id }, "Fetched SOS details");
       res.json({
         data: sos,
       });
     } catch (error) {
+      logger.error({ sosId: req.params.id, error }, "Error fetching SOS details");
       res.status(404).json({
         message: error instanceof Error ? error.message : "Unknown error",
       });
