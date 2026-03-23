@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import { redis } from "./redis-client";
-import type { Context } from "vm";
 
 export const tryLockMechanic = async (mechanicId: string) => {
   const key = `lock:mechanic:${mechanicId}`;

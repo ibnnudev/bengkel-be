@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "tsx watch index.ts"
+    "dev": "tsx watch index.ts",
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
