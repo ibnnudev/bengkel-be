@@ -1,3 +1,4 @@
+import { logger } from "../../lib/logger";
 import { prisma } from "../../prisma";
 import type { CreateUserDTO, UpdateUserDTO } from "./user.type";
 
@@ -7,6 +8,7 @@ export const userRepository = {
   },
 
   findById(id: string) {
+    logger.info({ id }, "Finding user by ID");
     return prisma.user.findUnique({ where: { id } });
   },
 

@@ -1,14 +1,14 @@
-import type { AssigmentStatus, SOSStatus } from "../../../generated/prisma";
+import type { SOSStatus } from "../../../generated/prisma";
 import { prisma } from "../../prisma";
 import type { CreateSOSDTO } from "./sos.type";
 
 export const sosRepository = {
   create(data: CreateSOSDTO) {
-    return prisma.sOSRequest.create({ data });
+    return prisma.sos_request.create({ data });
   },
 
   findById(id: string) {
-    return prisma.sOSRequest.findUnique({
+    return prisma.sos_request.findUnique({
         where: {id},
         include: {
             assigment: true,
@@ -19,7 +19,7 @@ export const sosRepository = {
   },
 
   updateStatus(id: string, status: SOSStatus) {
-    return prisma.sOSRequest.update({
+    return prisma.sos_request.update({
         where: {id},
         data: {status}
     })
@@ -28,8 +28,8 @@ export const sosRepository = {
   createAssigment(sosRequestId: string, mechanicId: string) {
     return prisma.assigment.create({
         data: {
-            sosRequestId,
-            mechanicId
+            sos_request_id: sosRequestId,
+            mechanic_id: mechanicId,
         }
     })
   },

@@ -1,18 +1,18 @@
 import { SOSStatus } from "../../../generated/prisma";
 
 export interface CreateSOSDTO {
-    userId: string;
-    vehicleId: string;
+    user_id: string;
+    vehicle_id: string;
     latitude: number;
     longitude: number;
 }
 
 export interface AssignMechanicDTO {
-    sosRequestId: string;
-    mechanicId: string;
+    sos_request_id: string;
+    mechanic_id: string;
 }
 
 export interface UpdateSOSStatusDTO {
-    sosRequestId: string;
+    sos_request_id: string;
     status: SOSStatus;
 }

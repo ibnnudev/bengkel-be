@@ -1,4 +1,4 @@
-import { Role, type User } from "../../../generated/prisma";
+import { Role, type user } from "../../../generated/prisma";
 import { calculateDistance } from "../../helper/calculate-distance.helper";
 import { prisma } from "../../prisma";
 import { userRepository } from "./user.repository";
@@ -37,9 +37,9 @@ export const userService = {
 
   async getMechanicNearby(lat: number, lng: number, radiusKm = 5) {
     const mechanics = await prisma.user.findMany({
-      where: {role: Role.MECHANIC, isAvailable: true}
+      where: {role: Role.MECHANIC, is_available: true}
     })
-    return mechanics.filter((mechanic: User) => {
+    return mechanics.filter((mechanic: user) => {
       if(!mechanic.latitude || !mechanic.longitude) return false;
       const distance = calculateDistance({
         lat1: lat,

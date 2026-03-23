@@ -1,0 +1,22 @@
+import express, { type NextFunction, type Request, type Response } from 'express';
+import sosRoute from './modules/sos/sos.route';
+import cors from 'cors';
+import { httpLogger } from './middleware/logger';
+
+const app = express();
+
+app.use(httpLogger);
+app.use(express.json());
+app.use(cors());
+
+app.use('/sos', sosRoute);
+
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+    req.log.error({err}, "unhandled error");
+
+    res.status(500).json({
+        message: "Internal Server Error"
+    });
+})
+
+export default app;

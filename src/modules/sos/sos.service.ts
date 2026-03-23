@@ -1,4 +1,6 @@
-import { AssigmentStatus, SOSStatus } from "../../../generated/prisma";
+import { AssignmentStatus, SOSStatus } from "../../../generated/prisma";
+import { kafkaProducer } from "../../infrastructure/kafka/kafka";
+import { KAFKA_TOPICS } from "../../infrastructure/kafka/topic";
 import { prisma } from "../../prisma";
 import { userRepository } from "../user/user.repository";
 import { userService } from "../user/user.service";
@@ -8,41 +10,60 @@ import type {
   CreateSOSDTO,
   UpdateSOSStatusDTO,
 } from "./sos.type";
+import { tryLockMechanic } from "../../infrastructure/redis/lock-mechanic";
 
 const MIN_RADIUS_IN_KM = 10;
 
 export const sosService = {
   async createSOS(data: CreateSOSDTO) {
-    const user = await userRepository.findById(data.userId);
+    console.log('user_id: ', data.user_id);
+    const user = await userRepository.findById(data.user_id);
     if (!user) throw new Error("User not found");
-    return sosRepository.create(data);
+
+    const sos = await sosRepository.create(data);
+    await kafkaProducer.send(KAFKA_TOPICS.CREATED, {
+      sosRequestId: sos.id,
+      latitude: sos.latitude,
+      longitude: sos.longitude,
+    });
+
+    return sos;
   },
 
   async assignMechanic(data: AssignMechanicDTO) {
-    const sos = await sosRepository.findById(data.sosRequestId);
+    const sos = await sosRepository.findById(data.sos_request_id);
     if (!sos) throw new Error("SOS Request not found");
 
     if (sos.status !== SOSStatus.REQUESTED)
       throw new Error("SOS already assigned or processed");
 
-    const mechanic = await userRepository.findById(data.mechanicId);
+    const mechanic = await userRepository.findById(data.mechanic_id);
     if (!mechanic || mechanic.role !== "MECHANIC")
       throw new Error("Invalid mechanic");
 
-    if (!mechanic.isAvailable) throw new Error("Mechanic is not available");
+    if (!mechanic.is_available) throw new Error("Mechanic is not available");
 
     const assigment = await sosRepository.createAssigment(
-      data.sosRequestId,
-      data.mechanicId,
+      data.sos_request_id,
+      data.mechanic_id,
     );
 
-    await sosRepository.updateAssigment(data.sosRequestId, SOSStatus.ASSIGNED);
+    await sosRepository.updateAssigment(data.sos_request_id, SOSStatus.ASSIGNED);
+
+    await kafkaProducer.send(KAFKA_TOPICS.ASSIGNED, {
+      key: sos.id,
+      value: JSON.stringify({
+        sos_request_id: sos.id,
+        latitude: sos.latitude,
+        longitude: sos.longitude,
+      }),
+    });
 
     return assigment;
   },
 
   async updateStatus(data: UpdateSOSStatusDTO) {
-    const sos = await sosRepository.findById(data.sosRequestId);
+    const sos = await sosRepository.findById(data.sos_request_id);
     if (!sos) throw new Error("SOS Request not found");
 
     const validTransitions: Record<SOSStatus, SOSStatus[]> = {
@@ -60,7 +81,7 @@ export const sosService = {
       );
     }
 
-    return sosRepository.updateStatus(data.sosRequestId, data.status);
+    return sosRepository.updateStatus(data.sos_request_id, data.status);
   },
 
   async getSOSDetail(id: string) {
@@ -71,7 +92,7 @@ export const sosService = {
   },
 
   async autoAssign(sosRequestId: string) {
-    const sos = await prisma.sOSRequest.findUnique({
+    const sos = await prisma.sos_request.findUnique({
       where: { id: sosRequestId },
     });
 
@@ -88,34 +109,42 @@ export const sosService = {
     if (mechanics.length == 0) throw new Error("No mechanics available");
 
     for (const mechanic of mechanics) {
+      const locked = await tryLockMechanic(mechanic.id);
+      if (!locked) continue;
+
       try {
         const result = await prisma.$transaction(async (tx) => {
           const freshMechanic = await tx.user.findUnique({
             where: { id: mechanic.id },
           });
 
-          if (!freshMechanic?.isAvailable)
+          if (!freshMechanic?.is_available)
             throw new Error("Mechanic already taken");
 
           await tx.user.update({
             where: { id: mechanic.id },
-            data: { isAvailable: false },
+            data: { is_available: false },
           });
 
           const assigment = await tx.assigment.create({
             data: {
-              sosRequestId,
-              mechanicId: mechanic.id,
-              status: AssigmentStatus.PENDING,
+              sos_request_id: sosRequestId,
+              mechanic_id: mechanic.id,
+              status: AssignmentStatus.PENDING,
             },
           });
 
-          await tx.sOSRequest.update({
+          await tx.sos_request.update({
             where: { id: sosRequestId },
             data: { status: SOSStatus.ASSIGNED },
           });
 
           return assigment;
+        });
+
+        await kafkaProducer.send(KAFKA_TOPICS.ASSIGNED, {
+          sos_request_id: sosRequestId,
+          mechanic_id: mechanic.id,
         });
 
         return result;

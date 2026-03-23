@@ -99,10 +99,10 @@ ALTER TABLE "sos_request" ADD CONSTRAINT "sos_request_user_id_fkey" FOREIGN KEY 
 ALTER TABLE "sos_request" ADD CONSTRAINT "sos_request_vehicle_id_fkey" FOREIGN KEY ("vehicle_id") REFERENCES "vehicle"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "assigment" ADD CONSTRAINT "assigment_sos_request_id_fkey" FOREIGN KEY ("sos_request_id") REFERENCES "sos_request"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "assigment" ADD CONSTRAINT "assigment_mechanic_id_fkey" FOREIGN KEY ("mechanic_id") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "assigment" ADD CONSTRAINT "assigment_mechanic_id_fkey" FOREIGN KEY ("mechanic_id") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "assigment" ADD CONSTRAINT "assigment_sos_request_id_fkey" FOREIGN KEY ("sos_request_id") REFERENCES "sos_request"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "service_log" ADD CONSTRAINT "service_log_sos_request_id_fkey" FOREIGN KEY ("sos_request_id") REFERENCES "sos_request"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
