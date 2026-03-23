@@ -3,8 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "scripts": {
-  },
+  "scripts": {},
   "devDependencies": {
     "@types/bun": "latest",
     "@types/express": "^5.0.6",
