@@ -1,16 +1,21 @@
+import { randomUUID } from "node:crypto";
 import { AssignmentStatus, SOSStatus } from "../../../generated/prisma";
+import { BusinessRuleError } from "../../error/business-rule.error";
+import { NotFoundError } from "../../error/not-found.error";
 import { kafkaProducer } from "../../infrastructure/kafka/kafka";
 import { KAFKA_TOPICS } from "../../infrastructure/kafka/topic";
+import { tryLockMechanic } from "../../infrastructure/redis/lock-mechanic";
+import { logger } from "../../lib/logger";
 import { prisma } from "../../prisma";
 import { userRepository } from "../user/user.repository";
 import { userService } from "../user/user.service";
+import { notifySosAssignmentKafka, tryAssignMechanic } from "./sos.helper";
 import { sosRepository } from "./sos.repository";
 import type {
   AssignMechanicDTO,
   CreateSOSDTO,
   UpdateSOSStatusDTO,
 } from "./sos.type";
-import { tryLockMechanic } from "../../infrastructure/redis/lock-mechanic";
 
 const MIN_RADIUS_IN_KM = 10;
 
@@ -20,8 +25,8 @@ export const sosService = {
     if (!user) throw new Error("User not found");
 
     const sos = await sosRepository.create(data);
-    if(sos.user_id == data.user_id && sos.status !== SOSStatus.REQUESTED) {
-      throw new Error("SOS already processed");
+    if (sos.user_id == data.user_id && sos.status !== SOSStatus.DONE) {
+      throw new BusinessRuleError("SOS already processed");
     }
 
     await kafkaProducer.send(KAFKA_TOPICS.CREATED, {
@@ -40,29 +45,19 @@ export const sosService = {
     if (sos.status !== SOSStatus.REQUESTED)
       throw new Error("SOS already assigned or processed");
 
-    const mechanic = await userRepository.findById(data.mechanic_id);
-    if (!mechanic || mechanic.role !== "MECHANIC")
-      throw new Error("Invalid mechanic");
+    const mechanic = await userRepository.findAvailableMechanics(
+      data.mechanic_id,
+    );
+    if (!mechanic) throw new NotFoundError("Mechanic");
 
-    if (!mechanic.is_available) throw new Error("Mechanic is not available");
-
-    const assigment = await sosRepository.createAssigment(
+    const assignment = await tryAssignMechanic(
       data.sos_request_id,
       data.mechanic_id,
     );
 
-    await sosRepository.updateAssigment(data.sos_request_id, SOSStatus.ASSIGNED);
+    await notifySosAssignmentKafka(sos);
 
-    await kafkaProducer.send(KAFKA_TOPICS.ASSIGNED, {
-      key: sos.id,
-      value: JSON.stringify({
-        sos_request_id: sos.id,
-        latitude: sos.latitude,
-        longitude: sos.longitude,
-      }),
-    });
-
-    return assigment;
+    return assignment;
   },
 
   async updateStatus(data: UpdateSOSStatusDTO) {
@@ -89,19 +84,18 @@ export const sosService = {
 
   async getSOSDetail(id: string) {
     const sos = await sosRepository.findById(id);
-    if (!sos) throw new Error("SOS not found");
+    if (!sos) throw new NotFoundError("SOS");
 
     return sos;
   },
 
   async autoAssign(sosRequestId: string) {
-    const sos = await prisma.sos_request.findUnique({
-      where: { id: sosRequestId },
-    });
+    const sos = await sosRepository.findById(sosRequestId);
 
-    if (!sos) throw new Error("SOS not found");
+    if (!sos) throw new NotFoundError("SOS");
+
     if (sos.status !== SOSStatus.REQUESTED) {
-      throw new Error("SOS already processed");
+      throw new BusinessRuleError("SOS already processed");
     }
 
     const mechanics = await userService.getMechanicNearby(
@@ -109,7 +103,8 @@ export const sosService = {
       sos.longitude,
       MIN_RADIUS_IN_KM,
     );
-    if (mechanics.length == 0) throw new Error("No mechanics available");
+    if (mechanics.length == 0)
+      throw new BusinessRuleError("No mechanics available");
 
     for (const mechanic of mechanics) {
       const locked = await tryLockMechanic(mechanic.id);
@@ -122,15 +117,16 @@ export const sosService = {
           });
 
           if (!freshMechanic?.is_available)
-            throw new Error("Mechanic already taken");
+            throw new BusinessRuleError("Mechanic already taken");
 
           await tx.user.update({
             where: { id: mechanic.id },
             data: { is_available: false },
           });
 
-          const assigment = await tx.assigment.create({
+          const assignment = await tx.assignment.create({
             data: {
+              id: randomUUID(),
               sos_request_id: sosRequestId,
               mechanic_id: mechanic.id,
               status: AssignmentStatus.PENDING,
@@ -142,7 +138,7 @@ export const sosService = {
             data: { status: SOSStatus.ASSIGNED },
           });
 
-          return assigment;
+          return assignment;
         });
 
         await kafkaProducer.send(KAFKA_TOPICS.ASSIGNED, {
@@ -152,6 +148,7 @@ export const sosService = {
 
         return result;
       } catch (error) {
+        logger.error({ error, mechanicId: mechanic.id });
         continue;
       }
     }

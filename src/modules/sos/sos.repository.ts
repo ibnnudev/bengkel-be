@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { SOSStatus } from "../../../generated/prisma";
 import { prisma } from "../../prisma";
 import type { CreateSOSDTO } from "./sos.type";
@@ -11,7 +12,7 @@ export const sosRepository = {
     return prisma.sos_request.findUnique({
         where: {id},
         include: {
-            assigment: true,
+            assignment: true,
             vehicle: true,
             user: true,
         }
@@ -25,17 +26,18 @@ export const sosRepository = {
     })
   },
 
-  createAssigment(sosRequestId: string, mechanicId: string) {
-    return prisma.assigment.create({
+  createAssignment(sosRequestId: string, mechanicId: string) {
+    return prisma.assignment.create({
         data: {
+            id: randomUUID(),
             sos_request_id: sosRequestId,
             mechanic_id: mechanicId,
         }
     })
   },
 
-  updateAssigment(id: string, status: any) {
-    return prisma.assigment.update({
+  updateAssignment(id: string, status: any) {
+    return prisma.assignment.update({
         where: {id},
         data: {status}
     })

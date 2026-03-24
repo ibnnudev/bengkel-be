@@ -7,6 +7,18 @@ export const userRepository = {
     return prisma.user.create({ data });
   },
 
+  findAvailableMechanics(user_id: string) {
+    return prisma.user.findMany({
+      where: {
+        role: 'MECHANIC',
+        is_available: true,
+        id: {
+          not: user_id,
+        }
+      }
+    })
+  },
+
   findById(id: string) {
     logger.info({ id }, "Finding user by ID");
     return prisma.user.findUnique({ where: { id } });
