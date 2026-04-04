@@ -23,11 +23,8 @@ const MIN_RADIUS_IN_KM = 10;
 
 export const sosService = {
   async createSOS(data: CreateSOSDTO) {
-    const user = await userRepository.findById(data.user_id);
-    if (!user) throw new NotFoundError(STACKHOLDER.USER);
-
-    const sos = await sosRepository.create(data);
-    if (sos.user_id == data.user_id && sos.status !== SOSStatus.DONE) {
+    const sos = await sosRepository.findByIdAndVehicleId(data.user_id, data.vehicle_id);
+    if (sos.status !== SOSStatus.DONE) {
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
     }
 
