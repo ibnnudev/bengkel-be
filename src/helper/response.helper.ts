@@ -45,7 +45,11 @@ export const sendError = (
     logger.error({ error }, "Error response: %s", message);
   }
 
-  const body: any = { success: false, message }
+  const body: any = {
+    code: status,
+    success: false, 
+    message
+   }
 
   const zodErrors = formatZodErrors(error)
   if (zodErrors) {

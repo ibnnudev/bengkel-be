@@ -3,6 +3,7 @@ import sosRoute from './modules/sos/sos.route';
 import cors from 'cors';
 import { httpLogger } from './middleware/logger';
 import { sendError } from './helper/response.helper';
+import { AppError } from './error/app.error';
 
 const app = express();
 
@@ -14,6 +15,10 @@ app.use('/sos', sosRoute);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     req.log.error({err}, "unhandled error");
+
+    if (err instanceof AppError) {
+        return sendError(res, err.message, err.statusCode);
+    }
 
     return sendError(res, 'Internal Server Error', 500, err instanceof Error ? err.message : err);
 })

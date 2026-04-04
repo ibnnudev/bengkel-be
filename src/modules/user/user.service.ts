@@ -1,4 +1,8 @@
 import { Role, type user } from "../../../generated/prisma";
+import { ERRORS } from "../../constants/errors";
+import { STACKHOLDER } from "../../constants/stackholder";
+import { BusinessRuleError } from "../../error/business-rule.error";
+import { NotFoundError } from "../../error/not-found.error";
 import { calculateDistance } from "../../helper/calculate-distance.helper";
 import { prisma } from "../../prisma";
 import { userRepository } from "./user.repository";
@@ -8,7 +12,7 @@ export const userService = {
   async createUser(data: CreateUserDTO) {
     const existing = await userRepository.findByPhone(data.phone);
     if (existing) {
-        throw new Error("Phone already registered");
+        throw new BusinessRuleError("Phone" + ERRORS.ALREADY_REGISTERED);
     }
 
     return userRepository.create({
@@ -20,7 +24,7 @@ export const userService = {
   async getUserById(id: string) {
     const user = await userRepository.findById(id);
     if(!user) {
-      throw new Error("User not found");
+      throw new NotFoundError(STACKHOLDER.USER);
     }
     return user;
   },

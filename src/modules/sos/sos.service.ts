@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { ERRORS } from "../../constants/errors";
+import { STACKHOLDER } from "../../constants/stackholder";
 import { AssignmentStatus, SOSStatus } from "../../../generated/prisma";
 import { BusinessRuleError } from "../../error/business-rule.error";
 import { NotFoundError } from "../../error/not-found.error";
@@ -22,11 +24,11 @@ const MIN_RADIUS_IN_KM = 10;
 export const sosService = {
   async createSOS(data: CreateSOSDTO) {
     const user = await userRepository.findById(data.user_id);
-    if (!user) throw new Error("User not found");
+    if (!user) throw new NotFoundError(STACKHOLDER.USER);
 
     const sos = await sosRepository.create(data);
     if (sos.user_id == data.user_id && sos.status !== SOSStatus.DONE) {
-      throw new BusinessRuleError("SOS already processed");
+      throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
     }
 
     await kafkaProducer.send(KAFKA_TOPICS.CREATED, {
@@ -40,15 +42,15 @@ export const sosService = {
 
   async assignMechanic(data: AssignMechanicDTO) {
     const sos = await sosRepository.findById(data.sos_request_id);
-    if (!sos) throw new Error("SOS Request not found");
+    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
 
     if (sos.status !== SOSStatus.REQUESTED)
-      throw new Error("SOS already assigned or processed");
+      throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
 
     const mechanic = await userRepository.findAvailableMechanics(
       data.mechanic_id,
     );
-    if (!mechanic) throw new NotFoundError("Mechanic");
+    if (!mechanic) throw new NotFoundError(STACKHOLDER.MECHANIC);
 
     const assignment = await tryAssignMechanic(
       data.sos_request_id,
@@ -62,7 +64,7 @@ export const sosService = {
 
   async updateStatus(data: UpdateSOSStatusDTO) {
     const sos = await sosRepository.findById(data.sos_request_id);
-    if (!sos) throw new Error("SOS Request not found");
+    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
 
     const validTransitions: Record<SOSStatus, SOSStatus[]> = {
       REQUESTED: [SOSStatus.ASSIGNED, SOSStatus.CANCELED],
@@ -74,8 +76,8 @@ export const sosService = {
 
     const allowed = validTransitions[sos.status];
     if (!allowed.includes(data.status)) {
-      throw new Error(
-        `Invalid status transition from ${sos.status} to ${data.status}`,
+      throw new BusinessRuleError(
+        `${ERRORS.INVALID_TRANSITION} from ${sos.status} to ${data.status}`,
       );
     }
 
@@ -84,7 +86,7 @@ export const sosService = {
 
   async getSOSDetail(id: string) {
     const sos = await sosRepository.findById(id);
-    if (!sos) throw new NotFoundError("SOS");
+    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
 
     return sos;
   },
@@ -92,10 +94,10 @@ export const sosService = {
   async autoAssign(sosRequestId: string) {
     const sos = await sosRepository.findById(sosRequestId);
 
-    if (!sos) throw new NotFoundError("SOS");
+    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
 
     if (sos.status !== SOSStatus.REQUESTED) {
-      throw new BusinessRuleError("SOS already processed");
+      throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
     }
 
     const mechanics = await userService.getMechanicNearby(
@@ -104,7 +106,7 @@ export const sosService = {
       MIN_RADIUS_IN_KM,
     );
     if (mechanics.length == 0)
-      throw new BusinessRuleError("No mechanics available");
+      throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.NO_MECHANICS_AVAILABLE);
 
     for (const mechanic of mechanics) {
       const locked = await tryLockMechanic(mechanic.id);
@@ -117,7 +119,7 @@ export const sosService = {
           });
 
           if (!freshMechanic?.is_available)
-            throw new BusinessRuleError("Mechanic already taken");
+            throw new BusinessRuleError(STACKHOLDER.MECHANIC + ERRORS.ALREADY_TAKEN);
 
           await tx.user.update({
             where: { id: mechanic.id },
