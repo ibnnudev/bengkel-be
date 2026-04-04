@@ -12,13 +12,15 @@ export const sosRepository = {
   },
 
   async findById(id: string) {
-    return await prisma.sos_request.findUnique({
+    return await prisma.sos_request.findUniqueOrThrow({
       where: { id },
       include: {
         assignment: true,
         vehicle: true,
         user: true,
       },
+    }).catch(() => {
+      throw new NotFoundError(STACKHOLDER.SOS);
     });
   },
 

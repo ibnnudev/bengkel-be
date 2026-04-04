@@ -17,11 +17,8 @@ export const sosController = {
   },
 
   async autoAssign(req: Request, res: Response) {
-    const { id } = req.params;
-
-    if (!id) {
-      return sendError(res, "ID parameter is required", 400);
-    }
+    const { id }: { id?: string } = req.params;
+    if (!id) return sendError(res, "ID parameter is required", 400);
 
     const result = await sosService.autoAssign(id.toString());
 

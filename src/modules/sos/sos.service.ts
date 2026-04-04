@@ -23,7 +23,10 @@ const MIN_RADIUS_IN_KM = 10;
 
 export const sosService = {
   async createSOS(data: CreateSOSDTO) {
-    const sos = await sosRepository.findByIdAndVehicleId(data.user_id, data.vehicle_id);
+    const sos = await sosRepository.findByIdAndVehicleId(
+      data.user_id,
+      data.vehicle_id,
+    );
     if (sos.status !== SOSStatus.DONE) {
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
     }
@@ -82,28 +85,19 @@ export const sosService = {
   },
 
   async getSOSDetail(id: string) {
-    const sos = await sosRepository.findById(id);
-    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
-
-    return sos;
+    return await sosRepository.findById(id);
   },
 
   async autoAssign(sosRequestId: string) {
     const sos = await sosRepository.findById(sosRequestId);
-
-    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
-
-    if (sos.status !== SOSStatus.REQUESTED) {
+    if (sos.status !== SOSStatus.REQUESTED)
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
-    }
 
     const mechanics = await userService.getMechanicNearby(
       sos.latitude,
       sos.longitude,
       MIN_RADIUS_IN_KM,
     );
-    if (mechanics.length == 0)
-      throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.NO_MECHANICS_AVAILABLE);
 
     for (const mechanic of mechanics) {
       const locked = await tryLockMechanic(mechanic.id);
@@ -116,7 +110,9 @@ export const sosService = {
           });
 
           if (!freshMechanic?.is_available)
-            throw new BusinessRuleError(STACKHOLDER.MECHANIC + ERRORS.ALREADY_TAKEN);
+            throw new BusinessRuleError(
+              STACKHOLDER.MECHANIC + ERRORS.ALREADY_TAKEN,
+            );
 
           await tx.user.update({
             where: { id: mechanic.id },

@@ -43,13 +43,15 @@ export const userService = {
     const mechanics = await prisma.user.findMany({
       where: {role: Role.MECHANIC, is_available: true}
     })
+
+    if(!mechanics.length) throw new NotFoundError(STACKHOLDER.MECHANIC);
+
     return mechanics.filter((mechanic: user) => {
-      if(!mechanic.latitude || !mechanic.longitude) return false;
       const distance = calculateDistance({
         lat1: lat,
         lon1: lng,
-        lat2: mechanic.latitude,
-        lon2: mechanic.longitude
+        lat2: mechanic.latitude!,
+        lon2: mechanic.longitude!,
       });
 
       return distance <= radiusKm
