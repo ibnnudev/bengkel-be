@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ERRORS } from "../../constants/errors";
 import { STACKHOLDER } from "../../constants/stackholder";
-import { AssignmentStatus, SOSStatus } from "../../../generated/prisma";
+import { AssignmentStatus, OrderStatus } from "../../../generated/prisma";
 import { BusinessRuleError } from "../../error/business-rule.error";
 import { NotFoundError } from "../../error/not-found.error";
 import { kafkaProducer } from "../../infrastructure/kafka/kafka";
@@ -11,40 +11,40 @@ import { logger } from "../../lib/logger";
 import { prisma } from "../../prisma";
 import { userRepository } from "../user/user.repository";
 import { userService } from "../user/user.service";
-import { notifySosAssignmentKafka, tryAssignMechanic } from "./sos.helper";
-import { sosRepository } from "./sos.repository";
+import { notifyOrderAssignmentKafka, tryAssignMechanic } from "./order.helper";
+import { orderRepository } from "./order.repository";
 import type {
   AssignMechanicDTO,
-  CreateSOSDTO,
-  UpdateSOSStatusDTO,
-} from "./sos.type";
+  CreateOrderDTO,
+  UpdateOrderStatusDTO,
+} from "./order.type";
 
 const MIN_RADIUS_IN_KM = 10;
 
-export const sosService = {
-  async createSOS(data: CreateSOSDTO) {
-    const sos = await sosRepository.findByIdAndVehicleId(
+export const orderService = {
+  async createOrder(data: CreateOrderDTO) {
+    const order = await orderRepository.findByIdAndVehicleId(
       data.user_id,
       data.vehicle_id,
     );
-    if (sos.status !== SOSStatus.DONE) {
+    if (order.status !== OrderStatus.DONE) {
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
     }
 
     await kafkaProducer.send(KAFKA_TOPICS.CREATED, {
-      sosRequestId: sos.id,
-      latitude: sos.latitude,
-      longitude: sos.longitude,
+      orderRequestId: order.id,
+      latitude: order.latitude,
+      longitude: order.longitude,
     });
 
-    return sos;
+    return order;
   },
 
   async assignMechanic(data: AssignMechanicDTO) {
-    const sos = await sosRepository.findById(data.sos_request_id);
-    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
+    const order = await orderRepository.findById(data.order_id);
+    if (!order) throw new NotFoundError(STACKHOLDER.SOS);
 
-    if (sos.status !== SOSStatus.REQUESTED)
+    if (order.status !== OrderStatus.REQUESTED)
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
 
     const mechanic = await userRepository.findAvailableMechanics(
@@ -53,44 +53,46 @@ export const sosService = {
     if (!mechanic) throw new NotFoundError(STACKHOLDER.MECHANIC);
 
     const assignment = await tryAssignMechanic(
-      data.sos_request_id,
+      data.order_id,
       data.mechanic_id,
     );
 
-    await notifySosAssignmentKafka(sos);
+    await notifyOrderAssignmentKafka(order);
 
     return assignment;
   },
 
-  async updateStatus(data: UpdateSOSStatusDTO) {
-    const sos = await sosRepository.findById(data.sos_request_id);
-    if (!sos) throw new NotFoundError(STACKHOLDER.SOS);
+  async updateStatus(data: UpdateOrderStatusDTO) {
+    const order = await orderRepository.findById(data.order_request_id);
+    if (!order) throw new NotFoundError(STACKHOLDER.SOS);
 
-    const validTransitions: Record<SOSStatus, SOSStatus[]> = {
-      REQUESTED: [SOSStatus.ASSIGNED, SOSStatus.CANCELED],
-      ASSIGNED: [SOSStatus.ON_PROGRESS, SOSStatus.CANCELED],
-      ON_PROGRESS: [SOSStatus.DONE],
+    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+      REQUESTED: [OrderStatus.ASSIGNED, OrderStatus.CANCELED],
+      WAITING_APPROVAL: [OrderStatus.ON_PROGRESS, OrderStatus.CANCELED],
+      ON_THE_WAY: [OrderStatus.ON_PROGRESS, OrderStatus.CANCELED],
+      ASSIGNED: [OrderStatus.ON_PROGRESS, OrderStatus.CANCELED],
+      ON_PROGRESS: [OrderStatus.DONE],
       DONE: [],
       CANCELED: [],
     };
 
-    const allowed = validTransitions[sos.status];
+    const allowed = validTransitions[order.status];
     if (!allowed.includes(data.status)) {
       throw new BusinessRuleError(
-        `${ERRORS.INVALID_TRANSITION} from ${sos.status} to ${data.status}`,
+        `${ERRORS.INVALID_TRANSITION} from ${order.status} to ${data.status}`,
       );
     }
 
-    return sosRepository.updateStatus(data.sos_request_id, data.status);
+    return orderRepository.updateStatus(data.order_request_id, data.status);
   },
 
-  async getSOSDetail(id: string) {
-    return await sosRepository.findById(id);
+  async getOrderDetail(id: string) {
+    return await orderRepository.findById(id);
   },
 
-  async autoAssign(sosRequestId: string) {
-    const sos = await sosRepository.findById(sosRequestId);
-    if (sos.status !== SOSStatus.REQUESTED)
+  async autoAssignOrder(orderRequestId: string) {
+    const sos = await orderRepository.findById(orderRequestId);
+    if (sos.status !== OrderStatus.REQUESTED)
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
 
     const mechanics = await userService.getMechanicNearby(
@@ -122,22 +124,22 @@ export const sosService = {
           const assignment = await tx.assignment.create({
             data: {
               id: randomUUID(),
-              sos_request_id: sosRequestId,
+              order_id: orderRequestId,
               mechanic_id: mechanic.id,
               status: AssignmentStatus.PENDING,
             },
           });
 
-          await tx.sos_request.update({
-            where: { id: sosRequestId },
-            data: { status: SOSStatus.ASSIGNED },
+          await tx.order.update({
+            where: { id: orderRequestId },
+            data: { status: OrderStatus.ASSIGNED },
           });
 
           return assignment;
         });
 
         await kafkaProducer.send(KAFKA_TOPICS.ASSIGNED, {
-          sos_request_id: sosRequestId,
+          order_id: orderRequestId,
           mechanic_id: mechanic.id,
         });
 

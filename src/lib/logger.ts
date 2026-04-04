@@ -1,47 +1,45 @@
-import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import { logs, SeverityNumber, type AnyValueMap } from "@opentelemetry/api-logs";
 import { trace, context } from "@opentelemetry/api";
 
 const otelLogger = logs.getLogger("bengkel-be");
 
-type LogAttributes = Record<string, unknown>;
+type LogAttributes = AnyValueMap;
 
-function emit(severityNumber: SeverityNumber, severityText: string, msg: string, attrs?: LogAttributes) {
-  const span = trace.getSpan(context.active());
+function emit(
+  severityNumber: SeverityNumber,
+  severityText: string,
+  message: string,
+  attrs?: LogAttributes
+) {
+  const span = trace.getActiveSpan();
   const spanContext = span?.spanContext();
+
+  const base = {
+    timestamp: new Date().toISOString(), 
+    severity: severityText,
+    message,
+  };
+
+  const traceFields =
+    spanContext && {
+      trace_id: spanContext.traceId,
+      span_id: spanContext.spanId,
+    };
+
+  const log: AnyValueMap = {
+    ...base,
+    ...(attrs || {}),
+    ...traceFields,
+  };
 
   otelLogger.emit({
     severityNumber,
     severityText,
-    body: msg,
-    attributes: {
-      ...attrs,
-      ...(spanContext
-        ? {
-            trace_id: spanContext.traceId,
-            span_id: spanContext.spanId,
-          }
-        : {}),
-    },
+    body: message,
+    attributes: log,
   });
 
-  const traceId = spanContext?.traceId;
-
-  const ddLog: Record<string, unknown> = {
-    attributes: attrs || {},
-    timestamp: new Date().toISOString(),
-    // service: process.env.DD_SERVICE || "bengkel-be",
-    // env: process.env.DD_ENV || "development",
-    // version: process.env.DD_VERSION || "1.0.0",
-    level: severityText,
-    message: msg,
-  };
-
-  if (traceId) {
-    (ddLog as any).trace_id = traceId;
-    (ddLog as any).span_id = spanContext?.spanId;
-  }
-
-  const out = JSON.stringify(ddLog);
+  const out = JSON.stringify(log);
 
   if (severityNumber >= SeverityNumber.ERROR) {
     console.error(out);
@@ -53,27 +51,27 @@ function emit(severityNumber: SeverityNumber, severityText: string, msg: string,
 }
 
 export const logger = {
-  info(attrs: LogAttributes | string, msg?: string) {
-    if (typeof attrs === "string") {
-      emit(SeverityNumber.INFO, "INFO", attrs);
+  info(input: LogAttributes | string, msg?: string) {
+    if (typeof input === "string") {
+      emit(SeverityNumber.INFO, "INFO", input);
     } else {
-      emit(SeverityNumber.INFO, "INFO", msg ?? "", attrs);
+      emit(SeverityNumber.INFO, "INFO", msg ?? "", input);
     }
   },
 
-  warn(attrs: LogAttributes | string, msg?: string) {
-    if (typeof attrs === "string") {
-      emit(SeverityNumber.WARN, "WARN", attrs);
+  warn(input: LogAttributes | string, msg?: string) {
+    if (typeof input === "string") {
+      emit(SeverityNumber.WARN, "WARN", input);
     } else {
-      emit(SeverityNumber.WARN, "WARN", msg ?? "", attrs);
+      emit(SeverityNumber.WARN, "WARN", msg ?? "", input);
     }
   },
 
-  error(attrs: LogAttributes | string, msg?: string) {
-    if (typeof attrs === "string") {
-      emit(SeverityNumber.ERROR, "ERROR", attrs);
+  error(input: LogAttributes | string, msg?: string) {
+    if (typeof input === "string") {
+      emit(SeverityNumber.ERROR, "ERROR", input);
     } else {
-      emit(SeverityNumber.ERROR, "ERROR", msg ?? "", attrs);
+      emit(SeverityNumber.ERROR, "ERROR", msg ?? "", input);
     }
   },
 };

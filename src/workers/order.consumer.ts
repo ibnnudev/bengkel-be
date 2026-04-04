@@ -1,6 +1,6 @@
 import { Kafka } from "kafkajs";
 import { KAFKA_TOPICS } from "../infrastructure/kafka/topic";
-import { sosService } from "../modules/sos/sos.service";
+import { orderService } from "../modules/order/order.service";
 import { logger } from "../lib/logger";
 
 const kafka = new Kafka({
@@ -37,7 +37,7 @@ export const startSOSConsumer = async () => {
             }
 
             try {
-                await sosService.autoAssign(data.sosRequestId);
+                await orderService.autoAssign(data.sosRequestId);
             } catch (error) {
                 console.error("Auto assign failed:", error);
             }

@@ -1,6 +1,6 @@
 import { kafka } from "../infrastructure/kafka/kafka";
 import { KAFKA_TOPICS } from "../infrastructure/kafka/topic";
-import { sosService } from "../modules/sos/sos.service";
+import { orderService } from "../modules/order/order.service";
 import { logger } from "../lib/logger";
 
 const consumer = kafka.consumer({ groupId: "sos-group" });
@@ -34,7 +34,7 @@ export const startSOSWorker = async () => {
       }
 
       try {
-        await sosService.autoAssign(payload.sosRequestId);
+        await orderService.autoAssignOrder(payload.orderRequestId);
       } catch (error) {
         console.error("Auto assign failed:", error);
       }

@@ -1,29 +1,32 @@
 import type { Request, Response, NextFunction } from "express";
-import { trace, context } from "@opentelemetry/api";
+import { trace } from "@opentelemetry/api";
 import { logger } from "../lib/logger";
 
 export const httpLogger = (req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
 
+  // ✅ capture span SEKALI di awal (biar context tidak hilang)
+  const span = trace.getActiveSpan();
+  const spanContext = span?.spanContext();
+
   res.on("finish", () => {
     const duration = Date.now() - start;
-    const span = trace.getSpan(context.active());
-    const traceId = span?.spanContext()?.traceId;
 
     const attrs = {
-      method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      duration,
-      ...(traceId && { traceId }),
+      "http.method": req.method,
+      "http.target": req.originalUrl,
+      "http.status_code": res.statusCode,
+      "http.duration_ms": duration,
     };
 
+    const message = `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`;
+
     if (res.statusCode >= 500) {
-      logger.error(attrs, `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+      logger.error(attrs, message);
     } else if (res.statusCode >= 400) {
-      logger.warn(attrs, `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+      logger.warn(attrs, message);
     } else {
-      logger.info(attrs, `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+      logger.info(attrs, message);
     }
   });
 

@@ -1,43 +1,44 @@
 import type { Response, Request } from "express";
-import { sosService } from "./sos.service";
+import { orderService } from "./order.service";
 import { sendSuccess, sendError } from "../../helper/response.helper";
 
-export const sosController = {
-  async createSOS(req: Request, res: Response) {
+export const orderController = {
+  async createOrder(req: Request, res: Response) {
     const { user_id, vehicle_id, latitude, longitude } = req.body;
 
-    const sos = await sosService.createSOS({
+    const order = await orderService.createOrder({
       user_id,
       vehicle_id,
       latitude,
       longitude,
+      schedule_at: new Date(),
     });
 
-    return sendSuccess(res, sos, "SOS created", 201);
+    return sendSuccess(res, order, "Order created", 201);
   },
 
   async autoAssign(req: Request, res: Response) {
     const { id }: { id?: string } = req.params;
     if (!id) return sendError(res, "ID parameter is required", 400);
 
-    const result = await sosService.autoAssign(id.toString());
+    const result = await orderService.autoAssignOrder(id.toString());
 
     return sendSuccess(res, result, "Mechanic assigned");
   },
 
   async getDetail(req: Request, res: Response) {
     const { id } = req.params;
-    const sos = await sosService.getSOSDetail(id!.toString());
+    const order = await orderService.getOrderDetail(id!.toString());
     
-    return sendSuccess(res, sos);
+    return sendSuccess(res, order);
   },
 
   async updateStatus(req: Request, res: Response) {
     const { id } = req.params;
     const { status } = req.body;
 
-    const result = await sosService.updateStatus({
-      sos_request_id: id!.toString(),
+    const result = await orderService.updateStatus({
+      order_request_id: id!.toString(),
       status,
     });
     return sendSuccess(res, result, "Status updated");

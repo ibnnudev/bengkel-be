@@ -8,53 +8,61 @@ datasource db {
 }
 
 model user {
-  id            String         @id @default(uuid())
+  id            String   @id @default(uuid())
   name          String
-  phone         String         @unique
-  role          Role           @default(CUSTOMER)
-  created_at    DateTime       @default(now())
-  /// For mechanics
+  phone         String   @unique
+  role          Role     @default(CUSTOMER)
+  created_at    DateTime @default(now())
+
   latitude      Float?
   longitude     Float?
-  is_available  Boolean?       @default(false)
-  assignment    assignment[]
-  notifications notification[]
-  requests      sos_request[]
+  is_available  Boolean  @default(false)
+
+  assignments   assignment[]
   vehicles      vehicle[]
+  notifications notification[]
+
+  orders        order[]
 }
 
 model vehicle {
-  id           String        @id @default(uuid())
+  id           String   @id @default(uuid())
   user_id      String
   brand        String
   model        String
-  plate_number String        @unique
-  created_at   DateTime      @default(now())
-  requests     sos_request[]
-  user         user          @relation(fields: [user_id], references: [id])
+  plate_number String   @unique
+  created_at   DateTime @default(now())
+  requests     order[]
+  user         user     @relation(fields: [user_id], references: [id])
 }
 
-model sos_request {
-  id         String        @id @default(uuid())
-  user_id    String
-  vehicle_id String
-  latitude   Float
-  longitude  Float
-  status     SOSStatus     @default(REQUESTED)
-  created_at DateTime      @default(now())
-  assignment assignment?
-  logs       service_log[]
-  user       user          @relation(fields: [user_id], references: [id])
-  vehicle    vehicle       @relation(fields: [vehicle_id], references: [id])
+model order {
+  id          String        @id @default(uuid())
+  user_id     String
+  vehicle_id  String
+  latitude    Float
+  longitude   Float
+  schedule_at DateTime
+  status      OrderStatus     @default(REQUESTED)
+  created_at  DateTime      @default(now())
+  assignment  assignment?
+  logs        service_log[]
+  user        user          @relation(fields: [user_id], references: [id])
+  vehicle     vehicle       @relation(fields: [vehicle_id], references: [id])
+
+  invoices invoice[]
 }
 
 model service_log {
-  id             String           @id @default(uuid())
-  sos_request_id String
-  mechanic_id    String
-  status         AssignmentStatus @default(PENDING)
-  assigned_at    DateTime         @default(now())
-  sos_request    sos_request      @relation(fields: [sos_request_id], references: [id])
+  id          String           @id @default(uuid())
+  order_id    String
+  notes String?
+  mechanic_id String
+  status      AssignmentStatus @default(PENDING)
+  assigned_at DateTime         @default(now())
+  order       order            @relation(fields: [order_id], references: [id])
+
+  items service_item[]
 }
 
 model notification {
@@ -68,13 +76,50 @@ model notification {
 }
 
 model assignment {
-  id             String           @id @default(uuid())
-  sos_request_id String           @unique
-  mechanic_id    String
-  status         AssignmentStatus @default(PENDING)
-  assigned_at    DateTime         @default(now())
-  user           user             @relation(fields: [mechanic_id], references: [id])
-  sos_request    sos_request      @relation(fields: [sos_request_id], references: [id])
+  id          String           @id @default(uuid())
+  order_id    String           @unique
+  mechanic_id String
+  status      AssignmentStatus @default(PENDING)
+  assigned_at DateTime         @default(now())
+  user        user             @relation(fields: [mechanic_id], references: [id])
+  order       order            @relation(fields: [order_id], references: [id])
+}
+
+model sparepart { 
+  id String @id @default(uuid())
+  name String
+  stock Int
+  price Float
+  created_at DateTime @default(now())
+
+  items service_item[]
+}
+model service_item {
+  id String @id @default(uuid())
+  service_log_id String
+  sparepart_id String?
+  name String // Fallback name if sparepart is deleted
+  qty Int
+  price Float
+
+  service_log service_log @relation(fields: [service_log_id], references: [id])
+  sparepart sparepart? @relation(fields: [sparepart_id], references: [id])
+}
+
+model invoice {
+  id         String        @id @default(uuid())
+  order_id   String        @unique
+  total      Float
+  status     PaymentStatus @default(UNPAID)
+  created_at DateTime      @default(now())
+
+  order      order         @relation(fields: [order_id], references: [id])
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  FAILED
 }
 
 enum Role {
@@ -83,17 +128,30 @@ enum Role {
   ADMIN
 }
 
-enum SOSStatus {
-  REQUESTED
-  ASSIGNED
-  ON_PROGRESS
-  DONE
-  CANCELED
-}
-
 enum AssignmentStatus {
   PENDING
   ACCEPTED
   REJECTED
   COMPLETED
+}
+
+enum NotificationType {
+  ORDER
+  PAYMENT
+  SYSTEM
+}
+
+enum OrderType {
+  SOS
+  BOOKING
+}
+
+enum OrderStatus {
+  REQUESTED
+  ASSIGNED
+  ON_THE_WAY
+  ON_PROGRESS
+  WAITING_APPROVAL
+  DONE
+  CANCELED
 }
