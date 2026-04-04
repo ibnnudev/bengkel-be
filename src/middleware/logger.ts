@@ -1,33 +1,31 @@
-import { pinoHttp } from "pino-http";
+import type { Request, Response, NextFunction } from "express";
+import { trace, context } from "@opentelemetry/api";
 import { logger } from "../lib/logger";
-import { randomUUID } from "node:crypto";
 
-export const httpLogger = pinoHttp({
-  logger,
-  
-  genReqId: (_, res) => {
-    const id = randomUUID();
-    res.setHeader("x-request-id", id);
-    return id;
-  },
+export const httpLogger = (req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
 
-  customLogLevel: (req, res, err) => {
-    if (res.statusCode >= 500 || err) return "error";
-    if (res.statusCode >= 400) return "warn";
-    return "info";
-  },
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    const span = trace.getSpan(context.active());
+    const traceId = span?.spanContext()?.traceId;
 
-  customSuccessMessage: (req, res) => {
-    return `${req.method} ${req.url} ${res.statusCode} - ${res.responseTime}ms`;
-  },
+    const attrs = {
+      method: req.method,
+      url: req.originalUrl,
+      statusCode: res.statusCode,
+      duration,
+      ...(traceId && { traceId }),
+    };
 
-  customErrorMessage: (req, res, err) => {
-    return `${req.method} ${req.url} ${res.statusCode} - ${err?.message}`;
-  },
+    if (res.statusCode >= 500) {
+      logger.error(attrs, `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+    } else if (res.statusCode >= 400) {
+      logger.warn(attrs, `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+    } else {
+      logger.info(attrs, `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+    }
+  });
 
-  customProps: (req) => ({
-    requestId: req.id,
-  }),
-
-  autoLogging: false,
-});
+  next();
+};

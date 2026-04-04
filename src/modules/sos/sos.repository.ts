@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { SOSStatus } from "../../../generated/prisma";
 import { prisma } from "../../prisma";
 import type { CreateSOSDTO } from "./sos.type";
-import { logger } from "../../lib/logger";
 import { NotFoundError } from "../../error/not-found.error";
 import { STACKHOLDER } from "../../constants/stackholder";
 
@@ -12,29 +11,31 @@ export const sosRepository = {
   },
 
   async findById(id: string) {
-    return await prisma.sos_request.findUniqueOrThrow({
+    const record = await prisma.sos_request.findUnique({
       where: { id },
       include: {
         assignment: true,
         vehicle: true,
         user: true,
       },
-    }).catch(() => {
-      throw new NotFoundError(STACKHOLDER.SOS);
     });
+
+    if (!record) throw new NotFoundError(STACKHOLDER.SOS);
+
+    return record;
   },
 
   async findByIdAndVehicleId(user_id: string, vehicle_id: string) {
-    return await prisma.sos_request
-      .findFirstOrThrow({
-        where: {
-          user_id,
-          vehicle_id,
-        },
-      })
-      .catch(() => {
-        throw new NotFoundError(STACKHOLDER.SOS);
-      });
+    const record = await prisma.sos_request.findFirst({
+      where: {
+        user_id,
+        vehicle_id,
+      },
+    });
+
+    if (!record) throw new NotFoundError(STACKHOLDER.SOS);
+
+    return record;
   },
 
   async updateStatus(id: string, status: SOSStatus) {

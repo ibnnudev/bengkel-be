@@ -42,7 +42,7 @@ export const sendError = (
   error?: unknown
 ) => {
   if (error) {
-    logger.error({ error }, "Error response: %s", message);
+    logger.error({ error }, `Error response: ${message}`);
   }
 
   const body: any = {

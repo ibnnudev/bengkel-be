@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./src/instrumentation";
 import app from "./src/app";
 import { kafkaProducer } from "./src/infrastructure/kafka/kafka";
 import { logger } from "./src/lib/logger";
