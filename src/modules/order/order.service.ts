@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { AssignmentStatus, OrderStatus, PaymentStatus } from "../../../generated/prisma";
 import { ERRORS } from "../../constants/errors";
 import { STACKHOLDER } from "../../constants/stackholder";
-import { AssignmentStatus, OrderStatus } from "../../../generated/prisma";
 import { BusinessRuleError } from "../../error/business-rule.error";
 import { NotFoundError } from "../../error/not-found.error";
 import { kafkaProducer } from "../../infrastructure/kafka/kafka";
@@ -9,6 +9,9 @@ import { KAFKA_TOPICS } from "../../infrastructure/kafka/topic";
 import { tryLockMechanic } from "../../infrastructure/redis/lock-mechanic";
 import { logger } from "../../lib/logger";
 import { prisma } from "../../prisma";
+import { assignmentRepository } from "../assigment/assignment.repository";
+import { invoiceRepository } from "../invoice/invoice.repository";
+import { serviceItemRepository } from "../service-item/service-item.repository";
 import { userRepository } from "../user/user.repository";
 import { userService } from "../user/user.service";
 import { notifyOrderAssignmentKafka, tryAssignMechanic } from "./order.helper";
@@ -22,10 +25,10 @@ import type {
 const MIN_RADIUS_IN_KM = 10;
 
 export const orderService = {
-  async createOrder(data: CreateOrderDTO) {
+  async createOrder(dto: CreateOrderDTO) {
     const order = await orderRepository.findByIdAndVehicleId(
-      data.user_id,
-      data.vehicle_id,
+      dto.user_id,
+      dto.vehicle_id,
     );
     if (order.status !== OrderStatus.DONE) {
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
@@ -40,21 +43,21 @@ export const orderService = {
     return order;
   },
 
-  async assignMechanic(data: AssignMechanicDTO) {
-    const order = await orderRepository.findById(data.order_id);
+  async assignMechanic(dto: AssignMechanicDTO) {
+    const order = await orderRepository.findById(dto.order_id);
     if (!order) throw new NotFoundError(STACKHOLDER.SOS);
 
     if (order.status !== OrderStatus.REQUESTED)
       throw new BusinessRuleError(STACKHOLDER.SOS + ERRORS.ALREADY_PROCESSED);
 
     const mechanic = await userRepository.findAvailableMechanics(
-      data.mechanic_id,
+      dto.mechanic_id,
     );
     if (!mechanic) throw new NotFoundError(STACKHOLDER.MECHANIC);
 
     const assignment = await tryAssignMechanic(
-      data.order_id,
-      data.mechanic_id,
+      dto.order_id,
+      dto.mechanic_id,
     );
 
     await notifyOrderAssignmentKafka(order);
@@ -62,8 +65,8 @@ export const orderService = {
     return assignment;
   },
 
-  async updateStatus(data: UpdateOrderStatusDTO) {
-    const order = await orderRepository.findById(data.order_request_id);
+  async updateStatus(dto: UpdateOrderStatusDTO) {
+    const order = await orderRepository.findById(dto.order_request_id);
     if (!order) throw new NotFoundError(STACKHOLDER.SOS);
 
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
@@ -77,13 +80,13 @@ export const orderService = {
     };
 
     const allowed = validTransitions[order.status];
-    if (!allowed.includes(data.status)) {
+    if (!allowed.includes(dto.status)) {
       throw new BusinessRuleError(
-        `${ERRORS.INVALID_TRANSITION} from ${order.status} to ${data.status}`,
+        `${ERRORS.INVALID_TRANSITION} from ${order.status} to ${dto.status}`,
       );
     }
 
-    return orderRepository.updateStatus(data.order_request_id, data.status);
+    return orderRepository.updateStatus(dto.order_request_id, dto.status);
   },
 
   async getOrderDetail(id: string) {
@@ -145,9 +148,46 @@ export const orderService = {
 
         return result;
       } catch (error) {
-        logger.error({ error, mechanicId: mechanic.id });
+        logger.error({
+          error: error instanceof Error ? error.message : String(error),
+          mechanicId: mechanic.id,
+        });
         continue;
       }
     }
   },
+
+  async acceptOrder(orderId: string, mechanicId: string) {
+    return prisma.$transaction(async (tx) => {
+      const assignment = await assignmentRepository.findByMechanicAndOrderId(mechanicId, orderId);
+      if (assignment.status !== AssignmentStatus.PENDING) {
+        throw new BusinessRuleError(ERRORS.ALREADY_PROCESSED);
+      }
+
+      await assignmentRepository.updateStatus(assignment.id, AssignmentStatus.ACCEPTED);
+
+      await orderRepository.updateStatus(orderId, OrderStatus.ON_THE_WAY);
+
+    });
+  },
+
+  async startService(orderId: string) {
+    return await orderRepository.updateStatus(orderId, OrderStatus.ON_PROGRESS);
+  },
+
+  async completeOrder(orderId: string) {
+    return await prisma.$transaction(async (tx) => {
+      const items = await serviceItemRepository.findByOrderId(orderId);
+
+      const totalPrice = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+
+      await invoiceRepository.create({
+        order_id: orderId,
+        total: totalPrice,
+        status: PaymentStatus.UNPAID,
+      });
+
+      await orderRepository.updateStatus(orderId, OrderStatus.DONE);
+    })
+  }
 };

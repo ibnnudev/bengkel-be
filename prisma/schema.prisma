@@ -98,7 +98,7 @@ model service_item {
   id String @id @default(uuid())
   service_log_id String
   sparepart_id String?
-  name String // Fallback name if sparepart is deleted
+  name String
   qty Int
   price Float
 
