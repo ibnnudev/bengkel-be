@@ -1,8 +1,11 @@
 import "dotenv/config";
 
+import bcrypt from "bcryptjs";
 import { logger } from "../src/lib/logger";
 import { prisma } from "../src/infrastructure/database/prisma-client";
 import { Role, OrderType, OrderStatus, PaymentStatus } from "../generated/prisma";
+
+const DEFAULT_PASSWORD = bcrypt.hashSync("password123", 10);
 
 const main = async () => {
   logger.info("🌱 Seeding...");
@@ -11,6 +14,7 @@ const main = async () => {
     data: {
       name: "Ibnu Customer",
       phone: "081234567890",
+      password: DEFAULT_PASSWORD,
       role: Role.CUSTOMER,
     },
   });
@@ -29,6 +33,7 @@ const main = async () => {
       {
         name: "Mechanic A",
         phone: "0811111111",
+        password: DEFAULT_PASSWORD,
         role: Role.MECHANIC,
         latitude: -6.2,
         longitude: 106.816,
@@ -37,6 +42,7 @@ const main = async () => {
       {
         name: "Mechanic B",
         phone: "0822222222",
+        password: DEFAULT_PASSWORD,
         role: Role.MECHANIC,
         latitude: -6.21,
         longitude: 106.82,
@@ -45,6 +51,7 @@ const main = async () => {
       {
         name: "Mechanic C",
         phone: "0833333333",
+        password: DEFAULT_PASSWORD,
         role: Role.MECHANIC,
         latitude: -6.25,
         longitude: 106.9,

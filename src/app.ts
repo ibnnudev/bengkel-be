@@ -3,6 +3,7 @@ import express, {
     type Request,
     type Response,
 } from "express";
+import authRoute from "./modules/auth/auth.route";
 import sosRoute from "./modules/order/order.route";
 import cors from "cors";
 import { httpLogger } from "./middleware/logger";
@@ -15,6 +16,7 @@ app.use(httpLogger);
 app.use(express.json());
 app.use(cors());
 
+app.use("/auth", authRoute);
 app.use("/orders", sosRoute);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
